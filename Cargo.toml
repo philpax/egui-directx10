@@ -1,15 +1,15 @@
 [package]
-name = "egui-directx11"
+name = "egui-directx10"
 version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
-repository = "https://github.com/Nekomaru-PKU/egui-directx11"
-authors = ["Nekomaru <Nekomaru@pku.edu.cn>"]
+repository = "https://github.com/philpax/egui-directx10"
+authors = ["Philpax <me@philpax.me>", "Nekomaru <Nekomaru@pku.edu.cn>"]
 
-description = "This crate provides a Direct3D11 renderer for `egui`."
+description = "This crate provides a Direct3D10 renderer for `egui`."
 categories = ["gui", "game-development"]
-keywords = ["gui", "egui", "dx11", "d3d11", "directx11"]
+keywords = ["gui", "egui", "dx10", "d3d10", "directx10"]
 
 [dependencies]
 log = "0.4.21"
@@ -17,7 +17,7 @@ egui = "0.28.1"
 windows = { version = "0.58.0", features = [
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Direct3D",
-    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D10",
 ]}
 
 [dev-dependencies]

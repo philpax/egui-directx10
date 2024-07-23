@@ -294,7 +294,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-directx11"
+name = "egui-directx10"
 version = "0.5.0"
 dependencies = [
  "egui",

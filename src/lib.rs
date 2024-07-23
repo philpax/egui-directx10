@@ -1,25 +1,25 @@
 #![warn(missing_docs)]
 
-//! `egui-directx11`: a Direct3D11 renderer for [`egui`](https://crates.io/crates/egui).
+//! `egui-directx10`: a Direct3D10 renderer for [`egui`](https://crates.io/crates/egui).
 //! 
 //! This crate aims to provide a *minimal* set of features and APIs to render
-//! outputs from `egui` using Direct3D11. We assume you to be familiar with developing
-//! graphics applications using Direct3D11, and if not, this crate is not likely
+//! outputs from `egui` using Direct3D10. We assume you to be familiar with developing
+//! graphics applications using Direct3D10, and if not, this crate is not likely
 //! useful for you. Besides, this crate cares only about rendering outputs
 //! from `egui`, so it is all *your* responsibility to handle things like
 //! setting up the window and event loop, creating the device and swap chain, etc.
 //! 
-//! This crate is built upon the *official* Rust bindings of Direct3D11 and DXGI APIs
+//! This crate is built upon the *official* Rust bindings of Direct3D10 and DXGI APIs
 //! from the [`windows`](https://crates.io/crates/windows) crate [maintained by
 //! Microsoft](https://github.com/microsoft/windows-rs). Using this crate with
-//! other Direct3D11 bindings is not recommended and may result in unexpected behavior.
+//! other Direct3D10 bindings is not recommended and may result in unexpected behavior.
 //! 
 //! This crate is in early development. It should work in most cases but may lack
 //! certain features or functionalities.
 //! 
 //! To get started, you can check the [`Renderer`] struct provided by this crate.
-//! You can also take a look at the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx11/blob/main/examples/egui-demo.rs) example, which demonstrates all you need to do to set up a minimal application
-//! with Direct3D11 and `egui`. This example uses `winit` for window management and
+//! You can also take a look at the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx10/blob/main/examples/egui-demo.rs) example, which demonstrates all you need to do to set up a minimal application
+//! with Direct3D10 and `egui`. This example uses `winit` for window management and
 //! event handling, while native Win32 APIs should also work well.
 
 mod texture;
@@ -53,21 +53,21 @@ use windows::{
     Win32::Graphics::{
         Dxgi::Common::*,
         Direct3D::*,
-        Direct3D11::*,
+        Direct3D10::*,
     },
 };
 
 /// The core of this crate. You can set up a renderer via [`Renderer::new`]
 /// and render the output from `egui` with [`Renderer::render`].
 pub struct Renderer {
-    device: ID3D11Device,
+    device: ID3D10Device,
 
-    input_layout: ID3D11InputLayout,
-    vertex_shader: ID3D11VertexShader,
-    pixel_shader: ID3D11PixelShader,
-    rasterizer_state: ID3D11RasterizerState,
-    sampler_state: ID3D11SamplerState,
-    blend_state: ID3D11BlendState,
+    input_layout: ID3D10InputLayout,
+    vertex_shader: ID3D10VertexShader,
+    pixel_shader: ID3D10PixelShader,
+    rasterizer_state: ID3D10RasterizerState,
+    sampler_state: ID3D10SamplerState,
+    blend_state: ID3D10BlendState,
 
     texture_pool: TexturePool,
 }
@@ -119,13 +119,13 @@ struct MeshData {
 }
 
 impl Renderer {
-    /// Create a [`Renderer`] using the provided Direct3D11 device. The [`Renderer`]
-    /// holds various Direct3D11 resources and states derived from the device.
+    /// Create a [`Renderer`] using the provided Direct3D10 device. The [`Renderer`]
+    /// holds various Direct3D10 resources and states derived from the device.
     /// 
     /// If any Direct3D resource creation fails, this function will return an error.
-    /// You can create the Direct3D11 device with debug layer enabled to find out
+    /// You can create the Direct3D10 device with debug layer enabled to find out
     /// details on the error.
-    pub fn new(device: &ID3D11Device)-> Result<Self> {
+    pub fn new(device: &ID3D10Device)-> Result<Self> {
         let mut input_layout = None;
         let mut vertex_shader = None;
         let mut pixel_shader = None;
@@ -136,24 +136,22 @@ impl Renderer {
             device.CreateInputLayout(
                 &Self::INPUT_ELEMENTS_DESC,
                 Self::VS_BLOB,
-                Some(&mut input_layout))?;
+                Some(&mut input_layout)).unwrap();
             device.CreateVertexShader(
                 Self::VS_BLOB,
-                None,
-                Some(&mut vertex_shader))?;
+                Some(&mut vertex_shader)).unwrap();
             device.CreatePixelShader(
                 Self::PS_BLOB,
-                None,
-                Some(&mut pixel_shader))?;
+                Some(&mut pixel_shader)).unwrap();
             device.CreateRasterizerState(
                 &Self::RASTERIZER_DESC,
-                Some(&mut rasterizer_state))?;
+                Some(&mut rasterizer_state)).unwrap();
             device.CreateSamplerState(
                 &Self::SAMPLER_DESC,
-                Some(&mut sampler_state))?;
+                Some(&mut sampler_state)).unwrap();
             device.CreateBlendState(
                 &Self::BLEND_DESC,
-                Some(&mut blend_state))?;
+                Some(&mut blend_state)).unwrap();
         };
         Ok(Self {
             device: device.clone(),
@@ -179,14 +177,14 @@ impl Renderer {
     /// 
     /// If any Direct3D resource creation fails, this function will return an error.
     /// In this case you may have a incomplete or incorrect rendering result.
-    /// You can create the Direct3D11 device with debug layer enabled to find out
+    /// You can create the Direct3D10 device with debug layer enabled to find out
     /// details on the error.
     /// If the device has been lost, you should drop the [`Renderer`] and create
     /// a new one.
     /// 
     /// ## Pipeline State Management
     /// 
-    /// This function sets up its own Direct3D11 pipeline state for rendering on
+    /// This function sets up its own Direct3D10 pipeline state for rendering on
     /// the provided device context. It assumes that the hull shader, domain
     /// shader and geometry shader stages are not active on the provided device
     /// context without any further checks. It is all *your* responsibility to
@@ -202,21 +200,21 @@ impl Renderer {
     ///   in the pixel shader stage;
     /// + The render target(s) and blend state in the output merger stage;
     /// 
-    /// See the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx11/blob/main/examples/egui-demo.rs)
+    /// See the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx10/blob/main/examples/egui-demo.rs)
     /// example for code examples.
     pub fn render(
         &mut self,
-        device_context: &ID3D11DeviceContext,
-        render_target: &ID3D11RenderTargetView,
+        device_context: &ID3D10Device,
+        render_target: &ID3D10RenderTargetView,
         egui_ctx: &egui::Context,
         egui_output: RendererOutput,
         scale_factor: f32,
     )-> Result<()> {
-        self.texture_pool.update(device_context, egui_output.textures_delta)?;
+        self.texture_pool.update(device_context, egui_output.textures_delta).unwrap();
 
         if egui_output.shapes.is_empty() { return Ok(()); }
 
-        let frame_size = Self::get_render_target_size(render_target)?;
+        let frame_size = Self::get_render_target_size(render_target).unwrap();
         let frame_size_scaled = (
             frame_size.0 as f32 / scale_factor,
             frame_size.1 as f32 / scale_factor);
@@ -264,25 +262,25 @@ impl Renderer {
                 &self.device,
                 device_context,
                 &self.texture_pool,
-                mesh)?;
+                mesh).unwrap();
         }
         Ok(())
     }
 
     fn setup(
         &mut self,
-        ctx: &ID3D11DeviceContext,
-        render_target: &ID3D11RenderTargetView,
+        ctx: &ID3D10Device,
+        render_target: &ID3D10RenderTargetView,
         frame_size: (u32, u32)) {
         unsafe {
-            ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            ctx.IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ctx.IASetInputLayout(&self.input_layout);
-            ctx.VSSetShader(&self.vertex_shader, None);
-            ctx.PSSetShader(&self.pixel_shader, None);
+            ctx.VSSetShader(&self.vertex_shader);
+            ctx.PSSetShader(&self.pixel_shader);
             ctx.RSSetState(&self.rasterizer_state);
-            ctx.RSSetViewports(Some(&[D3D11_VIEWPORT {
-                TopLeftX: 0.,
-                TopLeftY: 0.,
+            ctx.RSSetViewports(Some(&[D3D10_VIEWPORT {
+                TopLeftX: 0,
+                TopLeftY: 0,
                 Width : frame_size.0 as _,
                 Height: frame_size.1 as _,
                 MinDepth: 0.,
@@ -296,19 +294,19 @@ impl Renderer {
                 None);
             ctx.OMSetBlendState(
                 &self.blend_state,
-                Some(&[0.; 4]),
+                &[0.; 4],
                 u32::MAX);
         }
     }
 
     fn draw_mesh(
-        device: &ID3D11Device,
-        device_context: &ID3D11DeviceContext,
+        device: &ID3D10Device,
+        device_context: &ID3D10Device,
         texture_pool: &TexturePool,
         mesh: MeshData,
     )-> Result<()> {
-        let vb = Self::create_index_buffer(device, &mesh.idx)?;
-        let ib = Self::create_vertex_buffer(device, &mesh.vtx)?;
+        let vb = Self::create_index_buffer(device, &mesh.idx).unwrap();
+        let ib = Self::create_vertex_buffer(device, &mesh.vtx).unwrap();
         unsafe {
             device_context.IASetVertexBuffers(
                 0,
@@ -353,39 +351,39 @@ impl Renderer {
     const VS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_vs.bin");
     const PS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_ps.bin");
 
-    const INPUT_ELEMENTS_DESC: [D3D11_INPUT_ELEMENT_DESC; 3] = [
-        D3D11_INPUT_ELEMENT_DESC {
+    const INPUT_ELEMENTS_DESC: [D3D10_INPUT_ELEMENT_DESC; 3] = [
+        D3D10_INPUT_ELEMENT_DESC {
             SemanticName: windows::core::s!("POSITION"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlot: 0,
             AlignedByteOffset: 0,
-            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            InputSlotClass: D3D10_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         },
-        D3D11_INPUT_ELEMENT_DESC {
+        D3D10_INPUT_ELEMENT_DESC {
             SemanticName: windows::core::s!("TEXCOORD"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32_FLOAT,
             InputSlot: 0,
-            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            AlignedByteOffset: D3D10_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D10_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         },
-        D3D11_INPUT_ELEMENT_DESC {
+        D3D10_INPUT_ELEMENT_DESC {
             SemanticName: windows::core::s!("COLOR"),
             SemanticIndex: 0,
             Format: DXGI_FORMAT_R32G32B32A32_FLOAT,
             InputSlot: 0,
-            AlignedByteOffset: D3D11_APPEND_ALIGNED_ELEMENT,
-            InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+            AlignedByteOffset: D3D10_APPEND_ALIGNED_ELEMENT,
+            InputSlotClass: D3D10_INPUT_PER_VERTEX_DATA,
             InstanceDataStepRate: 0,
         },
     ];
 
-    const RASTERIZER_DESC: D3D11_RASTERIZER_DESC = D3D11_RASTERIZER_DESC {
-        FillMode: D3D11_FILL_SOLID,
-        CullMode: D3D11_CULL_NONE,
+    const RASTERIZER_DESC: D3D10_RASTERIZER_DESC = D3D10_RASTERIZER_DESC {
+        FillMode: D3D10_FILL_SOLID,
+        CullMode: D3D10_CULL_NONE,
         FrontCounterClockwise: BOOL(0),
         DepthBias: 0,
         DepthBiasClamp: 0.,
@@ -396,84 +394,74 @@ impl Renderer {
         AntialiasedLineEnable: BOOL(0),
     };
 
-    const SAMPLER_DESC: D3D11_SAMPLER_DESC = D3D11_SAMPLER_DESC {
-        Filter: D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-        AddressU: D3D11_TEXTURE_ADDRESS_BORDER,
-        AddressV: D3D11_TEXTURE_ADDRESS_BORDER,
-        AddressW: D3D11_TEXTURE_ADDRESS_BORDER,
-        ComparisonFunc: D3D11_COMPARISON_ALWAYS,
+    const SAMPLER_DESC: D3D10_SAMPLER_DESC = D3D10_SAMPLER_DESC {
+        Filter: D3D10_FILTER_MIN_MAG_MIP_LINEAR,
+        AddressU: D3D10_TEXTURE_ADDRESS_BORDER,
+        AddressV: D3D10_TEXTURE_ADDRESS_BORDER,
+        AddressW: D3D10_TEXTURE_ADDRESS_BORDER,
+        ComparisonFunc: D3D10_COMPARISON_ALWAYS,
         BorderColor: [1., 1., 1., 1.],
         .. self::zeroed()
     };
 
-    const BLEND_DESC: D3D11_BLEND_DESC = D3D11_BLEND_DESC {
-        RenderTarget: [
-            D3D11_RENDER_TARGET_BLEND_DESC {
-                BlendEnable: BOOL(1),
-                SrcBlend: D3D11_BLEND_SRC_ALPHA,
-                DestBlend: D3D11_BLEND_INV_SRC_ALPHA,
-                BlendOp: D3D11_BLEND_OP_ADD,
-                SrcBlendAlpha: D3D11_BLEND_ONE,
-                DestBlendAlpha: D3D11_BLEND_INV_SRC_ALPHA,
-                BlendOpAlpha: D3D11_BLEND_OP_ADD,
-                RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as _,
-            },
-            self::zeroed(),
-            self::zeroed(),
-            self::zeroed(),
-            self::zeroed(),
-            self::zeroed(),
-            self::zeroed(),
-            self::zeroed(),
-        ],..self::zeroed()
+    const BLEND_DESC: D3D10_BLEND_DESC = D3D10_BLEND_DESC {
+        AlphaToCoverageEnable: BOOL(0),
+        BlendEnable: [BOOL(1), BOOL(0), BOOL(0), BOOL(0), BOOL(0), BOOL(0), BOOL(0), BOOL(0)],
+        SrcBlend: D3D10_BLEND_SRC_ALPHA,
+        DestBlend: D3D10_BLEND_INV_SRC_ALPHA,
+        BlendOp: D3D10_BLEND_OP_ADD,
+        SrcBlendAlpha: D3D10_BLEND_ONE,
+        DestBlendAlpha: D3D10_BLEND_INV_SRC_ALPHA,
+        BlendOpAlpha: D3D10_BLEND_OP_ADD,
+        RenderTargetWriteMask: [D3D10_COLOR_WRITE_ENABLE_ALL.0 as _, self::zeroed(), self::zeroed(), self::zeroed(), self::zeroed(), self::zeroed(), self::zeroed(), self::zeroed()],
     };
 }
 
 impl Renderer {
     fn create_vertex_buffer(
-        device: &ID3D11Device,
+        device: &ID3D10Device,
         data: &[VertexData],
-    )-> Result<ID3D11Buffer> {
+    )-> Result<ID3D10Buffer> {
         let mut vertex_buffer = None;
         unsafe { device.CreateBuffer(
-            &D3D11_BUFFER_DESC {
+            &D3D10_BUFFER_DESC {
                 ByteWidth: mem::size_of_val(data) as _,
-                Usage: D3D11_USAGE_IMMUTABLE,
-                BindFlags: D3D11_BIND_VERTEX_BUFFER.0 as _,
-                ..D3D11_BUFFER_DESC::default()
+                Usage: D3D10_USAGE_IMMUTABLE,
+                BindFlags: D3D10_BIND_VERTEX_BUFFER.0 as _,
+                ..D3D10_BUFFER_DESC::default()
             },
-            Some(&D3D11_SUBRESOURCE_DATA {
+            Some(&D3D10_SUBRESOURCE_DATA {
                 pSysMem: data.as_ptr() as _,
-                ..D3D11_SUBRESOURCE_DATA::default()
+                ..D3D10_SUBRESOURCE_DATA::default()
             }),
             Some(&mut vertex_buffer))
-        }?;
+        }.unwrap();
         Ok(vertex_buffer.unwrap())
     }
 
     fn create_index_buffer(
-        device: &ID3D11Device,
+        device: &ID3D10Device,
         data: &[u32],
-    )-> Result<ID3D11Buffer> {
+    )-> Result<ID3D10Buffer> {
         let mut index_buffer = None;
         unsafe { device.CreateBuffer(
-            &D3D11_BUFFER_DESC {
+            &D3D10_BUFFER_DESC {
                 ByteWidth: mem::size_of_val(data) as _,
-                Usage: D3D11_USAGE_IMMUTABLE,
-                BindFlags: D3D11_BIND_INDEX_BUFFER.0 as _,
-                ..D3D11_BUFFER_DESC::default()
+                Usage: D3D10_USAGE_IMMUTABLE,
+                BindFlags: D3D10_BIND_INDEX_BUFFER.0 as _,
+                ..D3D10_BUFFER_DESC::default()
             },
-            Some(&D3D11_SUBRESOURCE_DATA {
+            Some(&D3D10_SUBRESOURCE_DATA {
                 pSysMem: data.as_ptr() as _,
-                ..D3D11_SUBRESOURCE_DATA::default()
+                ..D3D10_SUBRESOURCE_DATA::default()
             }),
             Some(&mut index_buffer))
-        }?;
+        }.unwrap();
         Ok(index_buffer.unwrap())
     }
 
-    fn get_render_target_size(rtv: &ID3D11RenderTargetView) -> Result<(u32, u32)> {
-        let tex = unsafe { rtv.GetResource() }?.cast::<ID3D11Texture2D>()?;
+    fn get_render_target_size(rtv: &ID3D10RenderTargetView) -> Result<(u32, u32)> {
+        let tex = unsafe { rtv.GetResource() }?.cast::<ID3D10Texture2D>().unwrap();
         let mut desc = self::zeroed();
         unsafe { tex.GetDesc(&mut desc) };
         Ok((desc.Width, desc.Height))

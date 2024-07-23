@@ -5,8 +5,7 @@ use windows::Win32::{
     Graphics::{
         Dxgi::Common::*,
         Dxgi::*,
-        Direct3D::*,
-        Direct3D11::*,
+        Direct3D10::*,
     },
 };
 
@@ -29,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
-        .with_title("egui-directx11")
+        .with_title("egui-directx10")
         .with_inner_size(PhysicalSize::new(1600, 900))
         .build(&event_loop)?;
     let hwnd = if let RawWindowHandle::Win32(raw) =
@@ -42,7 +41,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let frame_size = window.inner_size();
     let (
         device,
-        device_context,
         swap_chain,
     ) = create_device_and_swap_chain(
         hwnd,
@@ -53,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         create_render_target_for_swap_chain(&device, &swap_chain)?);
 
     let egui_ctx = egui::Context::default();
-    let mut egui_renderer = egui_directx11::Renderer::new(&device)?;
+    let mut egui_renderer = egui_directx10::Renderer::new(&device)?;
     let mut egui_winit = egui_winit::State::new(
         egui_ctx.clone(),
         egui_ctx.viewport_id(),
@@ -90,16 +88,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         renderer_output,
                         platform_output,
                         _,
-                    ) = egui_directx11::split_output(egui_output);
+                    ) = egui_directx10::split_output(egui_output);
                     egui_winit.handle_platform_output(&window, platform_output);
 
                     unsafe {
-                        device_context.ClearRenderTargetView(
+                        device.ClearRenderTargetView(
                             render_target, 
                             &[0.0, 0.0, 0.0, 1.0]);
                     }
                     let _ = egui_renderer.render(
-                        &device_context,
+                        &device,
                         render_target,
                         &egui_ctx,
                         renderer_output,
@@ -113,9 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn resize_swap_chain_and_render_target(
-    device: &ID3D11Device,
+    device: &ID3D10Device,
     swap_chain: &IDXGISwapChain,
-    render_target: &mut Option<ID3D11RenderTargetView>,
+    render_target: &mut Option<ID3D10RenderTargetView>,
     new_width: u32,
     new_height: u32,
     new_format: DXGI_FORMAT,
@@ -140,32 +138,26 @@ fn create_device_and_swap_chain(
     frame_height: u32,
     frame_format: DXGI_FORMAT,
 )-> windows::core::Result<(
-    ID3D11Device,
-    ID3D11DeviceContext,
+    ID3D10Device,
     IDXGISwapChain)> {
     let dxgi_factory: IDXGIFactory = unsafe { CreateDXGIFactory() }?;
     let dxgi_adapter: IDXGIAdapter = unsafe { dxgi_factory.EnumAdapters(0) }?;
 
     let mut device = None;
-    let mut device_context = None;
     unsafe { 
-        D3D11CreateDevice(
+        D3D10CreateDevice(
             &dxgi_adapter,
-            D3D_DRIVER_TYPE_UNKNOWN,
+            D3D10_DRIVER_TYPE_HARDWARE,
             None,
             if cfg!(debug_assertions) {
-                D3D11_CREATE_DEVICE_DEBUG
+                D3D10_CREATE_DEVICE_DEBUG.0 as _
             } else {
-                D3D11_CREATE_DEVICE_FLAG(0)
+                0
             },
-            Some(&[D3D_FEATURE_LEVEL_11_0]),
-            D3D11_SDK_VERSION,
-            Some(&mut device),
-            None,
-            Some(&mut device_context))
+            D3D10_SDK_VERSION,
+            Some(&mut device))
     }?;
     let device = device.unwrap();
-    let device_context = device_context.unwrap();
 
     let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
         BufferDesc: DXGI_MODE_DESC {
@@ -179,7 +171,7 @@ fn create_device_and_swap_chain(
             Quality: 0,
         },
         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-        BufferCount: 2,
+        BufferCount: 1,
         OutputWindow: window,
         Windowed: BOOL(1),
         SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
@@ -200,15 +192,15 @@ fn create_device_and_swap_chain(
             window,
             DXGI_MWA_NO_ALT_ENTER)
     }?;
-    Ok((device, device_context, swap_chain))
+    Ok((device, swap_chain))
 }
 
 fn create_render_target_for_swap_chain(
-    device: &ID3D11Device,
+    device: &ID3D10Device,
     swap_chain: &IDXGISwapChain,
-)-> windows::core::Result<ID3D11RenderTargetView> {
+)-> windows::core::Result<ID3D10RenderTargetView> {
     let swap_chain_texture = unsafe {
-        swap_chain.GetBuffer::<ID3D11Texture2D>(0)
+        swap_chain.GetBuffer::<ID3D10Texture2D>(0)
     }?;
     let mut render_target = None;
     unsafe {

@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 use std::mem;
-use std::slice;
 
 use egui::{
     Color32,
@@ -20,36 +19,36 @@ use egui::{
 use windows::core::Result;
 use windows::Win32::Graphics::{
     Dxgi::Common::*,
-    Direct3D11::*,
+    Direct3D10::*,
 };
 
 struct Texture {
-    tex: ID3D11Texture2D,
-    srv: ID3D11ShaderResourceView,
+    tex: ID3D10Texture2D,
+    srv: ID3D10ShaderResourceView,
     pixels: Vec<Color32>,
     width: usize,
 }
 
 pub struct TexturePool {
-    device: ID3D11Device,
+    device: ID3D10Device,
     pool: HashMap<TextureId, Texture>,
 }
 
 impl TexturePool {
-    pub fn new(device: &ID3D11Device)-> Self {
+    pub fn new(device: &ID3D10Device)-> Self {
         Self {
             device: device.clone(),
             pool: HashMap::new(),
         }
     }
 
-    pub fn get_srv(&self, tid: TextureId)-> Option<ID3D11ShaderResourceView> {
+    pub fn get_srv(&self, tid: TextureId)-> Option<ID3D10ShaderResourceView> {
         self.pool.get(&tid).map(|t| t.srv.clone())
     }
 
     pub fn update(
         &mut self,
-        ctx: &ID3D11DeviceContext,
+        ctx: &ID3D10Device,
         delta: TexturesDelta)-> Result<()> {
         for (tid, delta) in delta.set {
             if delta.is_whole() {
@@ -69,57 +68,64 @@ impl TexturePool {
     }
 
     fn update_partial(
-        ctx: &ID3D11DeviceContext,
+        ctx: &ID3D10Device,
         old: &mut Texture,
         image: ImageData,
         [nx, ny]: [usize; 2],
-    )-> Result<()> {
-        let subr = unsafe {
-            let mut output = D3D11_MAPPED_SUBRESOURCE::default();
-            ctx.Map(
-                &old.tex,
-                0,
-                D3D11_MAP_WRITE_DISCARD,
-                0,
-                Some(&mut output),
-            )?;
-            output
-        };
+    ) -> Result<()> {
         match image {
             ImageData::Font(f) => {
-                let data = unsafe {
-                    let slice = slice::from_raw_parts_mut(
-                        subr.pData as *mut Color32,
-                        old.pixels.len());
-                    slice.as_mut_ptr().copy_from_nonoverlapping(
-                        old.pixels.as_ptr(),
-                        old.pixels.len());
-                    slice
-                };
-
-                let new: Vec<Color32> = f
-                    .pixels
-                    .iter()
-                    .map(|a| Color32::from_rgba_premultiplied(255, 255, 255, (a * 255.) as u8))
-                    .collect();
-
+                let row_pitch = old.width * 4; // 4 bytes per pixel
+                let mut update_data = vec![0u8; f.height() * row_pitch];
+    
                 for y in 0..f.height() {
                     for x in 0..f.width() {
-                        let whole = (ny + y) * old.width + nx + x;
                         let frac = y * f.width() + x;
-                        old.pixels[whole] = new[frac];
-                        data[whole] = new[frac];
+                        let whole = (ny + y) * old.width + nx + x;
+                        let dst_idx = y * row_pitch + x * 4;
+    
+                        // Create new Color32 and update old.pixels
+                        let new_color = Color32::from_rgba_premultiplied(
+                            255, 
+                            255, 
+                            255, 
+                            (f.pixels[frac] * 255.) as u8
+                        );
+                        old.pixels[whole] = new_color;
+    
+                        // Update update_data
+                        let color_array = new_color.to_array();
+                        update_data[dst_idx..dst_idx + 4].copy_from_slice(&color_array);
                     }
+                }
+    
+                let subresource_data = D3D10_BOX {
+                    left: nx as u32,
+                    top: ny as u32,
+                    front: 0,
+                    right: (nx + f.width()) as u32,
+                    bottom: (ny + f.height()) as u32,
+                    back: 1,
+                };
+    
+                unsafe {
+                    ctx.UpdateSubresource(
+                        &old.tex,
+                        0,
+                        Some(&subresource_data),
+                        update_data.as_ptr() as _,
+                        row_pitch as u32,
+                        0,
+                    );
                 }
             },
             _ => unreachable!(),
         }
-        unsafe { ctx.Unmap(&old.tex, 0) };
         Ok(())
     }
 
     fn create_texture(
-        device: &ID3D11Device,
+        device: &ID3D10Device,
         data: ImageData,
     )-> Result<Texture> {
         let width = data.width();
@@ -133,7 +139,7 @@ impl TexturePool {
                 .collect(),
         };
 
-        let desc = D3D11_TEXTURE2D_DESC {
+        let desc = D3D10_TEXTURE2D_DESC {
             Width: data.width() as _,
             Height: data.height() as _,
             MipLevels: 1,
@@ -143,25 +149,22 @@ impl TexturePool {
                 Count: 1,
                 Quality: 0,
             },
-            Usage: D3D11_USAGE_DYNAMIC,
-            BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as _,
-            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0 as _,
+            Usage: D3D10_USAGE_DYNAMIC,
+            BindFlags: D3D10_BIND_SHADER_RESOURCE.0 as _,
+            CPUAccessFlags: D3D10_CPU_ACCESS_WRITE.0 as _,
             ..Default::default()
         };
 
-        let subresource_data = D3D11_SUBRESOURCE_DATA {
+        let subresource_data = D3D10_SUBRESOURCE_DATA {
             pSysMem: pixels.as_ptr() as _,
             SysMemPitch: (width * mem::size_of::<Color32>()) as u32,
             SysMemSlicePitch: 0,
         };
 
-        let mut tex = None;
-        unsafe { device.CreateTexture2D(
+        let tex = unsafe { device.CreateTexture2D(
             &desc,
-            Some(&subresource_data),
-            Some(&mut tex))
+            Some(&subresource_data))
         }?;
-        let tex = tex.unwrap();
 
         let mut srv = None;
         unsafe { device.CreateShaderResourceView(
