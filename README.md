@@ -11,26 +11,33 @@ event handling, while native Win32 APIs should also work well.
 
 ## Considerations
 
-This crate is a fork of ['egui-directx11'](https://github.com/Nekomaru-PKU/egui-directx11)
+This crate is a fork of [`egui-directx11`](https://github.com/Nekomaru-PKU/egui-directx11)
 designed to target DirectX 10 instead. This is very niche and not recommended for general use.
+
+The shaders were built using [`gwihlidal/docker-fxc`](https://github.com/gwihlidal/docker-fxc):
+
+```sh
+docker run --rm -v "$(pwd)/shaders:/fxc/shaders" gwihlidal/fxc /T vs_4_0 /E vs_main shaders/egui.hlsl /Fo shaders/egui_vs.bin
+docker run --rm -v "$(pwd)/shaders:/fxc/shaders" gwihlidal/fxc /T ps_4_0 /E ps_main shaders/egui.hlsl /Fo shaders/egui_ps.bin
+```
 
 The original considerations section follows:
 
 ---
 
-This crate is a successor to [`egui-d3d10`](https://crates.io/crates/egui-d3d10),
+This crate is a successor to [`egui-d3d11`](https://crates.io/crates/egui-d3d11),
 which is no longer maintained and has certain issues or inconvenience in some cases.
 
 We assume you to be familiar with developing
-graphics applications using Direct3D10, and if not, this crate is not likely
+graphics applications using Direct3D11, and if not, this crate is not likely
 useful for you. Besides, this crate cares only about rendering outputs
 from `egui`, so it is all *your* responsibility to handle things like
 setting up the window and event loop, creating the device and swap chain, etc.
 
-This crate is built upon the *official* Rust bindings of Direct3D10 and DXGI APIs
+This crate is built upon the *official* Rust bindings of Direct3D11 and DXGI APIs
 from the [`windows`](https://crates.io/crates/windows) crate [maintained by
 Microsoft](https://github.com/microsoft/windows-rs). Using this crate with
-other Direct3D10 bindings is not recommended and may result in unexpected behavior.
+other Direct3D11 bindings is not recommended and may result in unexpected behavior.
 
 This crate is in early development. It should work in most cases but may lack
 certain features or functionalities.
