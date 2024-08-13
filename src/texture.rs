@@ -1,13 +1,17 @@
-// This file contains implementations inspired by or derived from the following sources:
+// This file contains implementations inspired by or derived from the following
+// sources:
 // - https://github.com/ohchase/egui-directx/blob/master/egui-directx11/src/texture.rs
-// 
-// Here I would express my gratitude for their contributions to the Rust community.
-// Their work served as a valuable reference and inspiration for this project.
-// 
+//
+// Here I would express my gratitude for their contributions to the Rust
+// community. Their work served as a valuable reference and inspiration for this
+// project.
+//
 // Nekomaru, March 2024
 
-use std::collections::HashMap;
-use std::mem;
+use std::{
+    collections::HashMap,
+    mem,
+};
 
 use egui::{
     Color32,
@@ -16,10 +20,12 @@ use egui::{
     TexturesDelta,
 };
 
-use windows::core::Result;
-use windows::Win32::Graphics::{
-    Dxgi::Common::*,
-    Direct3D10::*,
+use windows::{
+    core::Result,
+    Win32::Graphics::{
+        Direct3D10::*,
+        Dxgi::Common::*,
+    },
 };
 
 struct Texture {
@@ -35,28 +41,37 @@ pub struct TexturePool {
 }
 
 impl TexturePool {
-    pub fn new(device: &ID3D10Device)-> Self {
+    pub fn new(device: &ID3D10Device) -> Self {
         Self {
             device: device.clone(),
             pool: HashMap::new(),
         }
     }
 
-    pub fn get_srv(&self, tid: TextureId)-> Option<ID3D10ShaderResourceView> {
+    pub fn get_srv(&self, tid: TextureId) -> Option<ID3D10ShaderResourceView> {
         self.pool.get(&tid).map(|t| t.srv.clone())
     }
 
     pub fn update(
         &mut self,
         ctx: &ID3D10Device,
-        delta: TexturesDelta)-> Result<()> {
+        delta: TexturesDelta,
+    ) -> Result<()> {
         for (tid, delta) in delta.set {
             if delta.is_whole() {
-                self.pool.insert(tid, Self::create_texture(&self.device, delta.image)?);
+                self.pool.insert(
+                    tid,
+                    Self::create_texture(&self.device, delta.image)?,
+                );
                 // the old texture is returned and dropped here, freeing
                 // all its gpu resource.
             } else if let Some(tex) = self.pool.get_mut(&tid) {
-                Self::update_partial(ctx, tex, delta.image, delta.pos.unwrap())?;
+                Self::update_partial(
+                    ctx,
+                    tex,
+                    delta.image,
+                    delta.pos.unwrap(),
+                )?;
             } else {
                 log::warn!("egui wants to update a non-existing texture {tid:?}. this request will be ignored.");
             }
@@ -77,28 +92,29 @@ impl TexturePool {
             ImageData::Font(f) => {
                 let row_pitch = old.width * 4; // 4 bytes per pixel
                 let mut update_data = vec![0u8; f.height() * row_pitch];
-    
+
                 for y in 0..f.height() {
                     for x in 0..f.width() {
                         let frac = y * f.width() + x;
                         let whole = (ny + y) * old.width + nx + x;
                         let dst_idx = y * row_pitch + x * 4;
-    
+
                         // Create new Color32 and update old.pixels
                         let new_color = Color32::from_rgba_premultiplied(
-                            255, 
-                            255, 
-                            255, 
-                            (f.pixels[frac] * 255.) as u8
+                            255,
+                            255,
+                            255,
+                            (f.pixels[frac] * 255.) as u8,
                         );
                         old.pixels[whole] = new_color;
-    
+
                         // Update update_data
                         let color_array = new_color.to_array();
-                        update_data[dst_idx..dst_idx + 4].copy_from_slice(&color_array);
+                        update_data[dst_idx..dst_idx + 4]
+                            .copy_from_slice(&color_array);
                     }
                 }
-    
+
                 let subresource_data = D3D10_BOX {
                     left: nx as u32,
                     top: ny as u32,
@@ -107,7 +123,7 @@ impl TexturePool {
                     bottom: (ny + f.height()) as u32,
                     back: 1,
                 };
-    
+
                 unsafe {
                     ctx.UpdateSubresource(
                         &old.tex,
@@ -127,7 +143,7 @@ impl TexturePool {
     fn create_texture(
         device: &ID3D10Device,
         data: ImageData,
-    )-> Result<Texture> {
+    ) -> Result<Texture> {
         let width = data.width();
 
         let pixels = match &data {
@@ -135,7 +151,14 @@ impl TexturePool {
             ImageData::Font(f) => f
                 .pixels
                 .iter()
-                .map(|a| Color32::from_rgba_premultiplied(255, 255, 255, (a * 255.) as u8))
+                .map(|a| {
+                    Color32::from_rgba_premultiplied(
+                        255,
+                        255,
+                        255,
+                        (a * 255.) as u8,
+                    )
+                })
                 .collect(),
         };
 
@@ -161,17 +184,11 @@ impl TexturePool {
             SysMemSlicePitch: 0,
         };
 
-        let tex = unsafe { device.CreateTexture2D(
-            &desc,
-            Some(&subresource_data))
-        }?;
+        let tex =
+            unsafe { device.CreateTexture2D(&desc, Some(&subresource_data)) }?;
 
         let mut srv = None;
-        unsafe { device.CreateShaderResourceView(
-            &tex,
-            None,
-            Some(&mut srv))
-        }?;
+        unsafe { device.CreateShaderResourceView(&tex, None, Some(&mut srv)) }?;
         let srv = srv.unwrap();
 
         Ok(Texture {
