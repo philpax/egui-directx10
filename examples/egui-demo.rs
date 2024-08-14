@@ -1,28 +1,16 @@
 use windows::Win32::{
-    Foundation::{
-        BOOL,
-        HWND,
-    },
+    Foundation::{BOOL, HWND},
     Graphics::{
         Direct3D10::*,
-        Dxgi::{
-            Common::*,
-            *,
-        },
+        Dxgi::{Common::*, *},
     },
 };
 
 use winit::{
     dpi::PhysicalSize,
-    event::{
-        Event,
-        WindowEvent,
-    },
+    event::{Event, WindowEvent},
     event_loop::EventLoop,
-    raw_window_handle::{
-        HasWindowHandle,
-        RawWindowHandle,
-    },
+    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::WindowBuilder,
 };
 
@@ -100,9 +88,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .handle_platform_output(&window, platform_output);
 
                         unsafe {
-                            device.ClearRenderTargetView(render_target, &[
-                                0.0, 0.0, 0.0, 1.0,
-                            ]);
+                            device.ClearRenderTargetView(
+                                render_target,
+                                &[0.0, 0.0, 0.0, 1.0],
+                            );
                         }
                         let _ = egui_renderer.render(
                             &device,
