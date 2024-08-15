@@ -3,24 +3,26 @@
 //! `egui-directx10`: a Direct3D10 renderer for [`egui`](https://crates.io/crates/egui).
 //!
 //! This crate aims to provide a *minimal* set of features and APIs to render
-//! outputs from `egui` using Direct3D10. We assume you to be familiar with developing
-//! graphics applications using Direct3D10, and if not, this crate is not likely
-//! useful for you. Besides, this crate cares only about rendering outputs
-//! from `egui`, so it is all *your* responsibility to handle things like
-//! setting up the window and event loop, creating the device and swap chain, etc.
+//! outputs from `egui` using Direct3D10. We assume you to be familiar with
+//! developing graphics applications using Direct3D10, and if not, this crate is
+//! not likely useful for you. Besides, this crate cares only about rendering
+//! outputs from `egui`, so it is all *your* responsibility to handle things
+//! like setting up the window and event loop, creating the device and swap
+//! chain, etc.
 //!
-//! This crate is built upon the *official* Rust bindings of Direct3D10 and DXGI APIs
-//! from the [`windows`](https://crates.io/crates/windows) crate [maintained by
+//! This crate is built upon the *official* Rust bindings of Direct3D10 and DXGI
+//! APIs from the [`windows`](https://crates.io/crates/windows) crate [maintained by
 //! Microsoft](https://github.com/microsoft/windows-rs). Using this crate with
-//! other Direct3D10 bindings is not recommended and may result in unexpected behavior.
+//! other Direct3D10 bindings is not recommended and may result in unexpected
+//! behavior.
 //!
-//! This crate is in early development. It should work in most cases but may lack
-//! certain features or functionalities.
+//! This crate is in early development. It should work in most cases but may
+//! lack certain features or functionalities.
 //!
-//! To get started, you can check the [`Renderer`] struct provided by this crate.
-//! You can also take a look at the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx10/blob/main/examples/egui-demo.rs) example, which demonstrates all you need to do to set up a minimal application
-//! with Direct3D10 and `egui`. This example uses `winit` for window management and
-//! event handling, while native Win32 APIs should also work well.
+//! To get started, you can check the [`Renderer`] struct provided by this
+//! crate. You can also take a look at the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx10/blob/main/examples/egui-demo.rs) example, which demonstrates all you need to do to set up a minimal application
+//! with Direct3D10 and `egui`. This example uses `winit` for window management
+//! and event handling, while native Win32 APIs should also work well.
 
 mod texture;
 use texture::TexturePool;
@@ -31,13 +33,17 @@ const fn zeroed<T>() -> T {
     unsafe { mem::zeroed() }
 }
 
-use egui::epaint::{textures::TexturesDelta, ClippedShape, Primitive, Vertex};
-use egui::{ClippedPrimitive, Pos2, Rgba};
+use egui::{
+    epaint::{textures::TexturesDelta, ClippedShape, Primitive, Vertex},
+    ClippedPrimitive, Pos2, Rgba,
+};
 
 use windows::{
     core::{Interface, Result},
-    Win32::Foundation::{BOOL, RECT},
-    Win32::Graphics::{Direct3D::*, Direct3D10::*, Dxgi::Common::*},
+    Win32::{
+        Foundation::{BOOL, RECT},
+        Graphics::{Direct3D::*, Direct3D10::*, Dxgi::Common::*},
+    },
 };
 
 /// The core of this crate. You can set up a renderer via [`Renderer::new`]
@@ -60,8 +66,8 @@ pub struct Renderer {
 ///
 /// Call to [`egui::Context::run`] or [`egui::Context::end_frame`] yields a
 /// [`egui::FullOutput`]. The platform integration (for example `egui_winit`)
-/// consumes [`egui::FullOutput::platform_output`] and [`egui::FullOutput::viewport_output`],
-/// and the renderer consumes the rest.
+/// consumes [`egui::FullOutput::platform_output`] and
+/// [`egui::FullOutput::viewport_output`], and the renderer consumes the rest.
 ///
 /// To conveniently split a [`egui::FullOutput`] into a [`RendererOutput`] and
 /// outputs for the platform integration, use [`split_output`].
@@ -72,8 +78,8 @@ pub struct RendererOutput {
     pub pixels_per_point: f32,
 }
 
-/// Convenience method to split a [`egui::FullOutput`] into the [`RendererOutput`]
-/// part and other parts for platform integration.
+/// Convenience method to split a [`egui::FullOutput`] into the
+/// [`RendererOutput`] part and other parts for platform integration.
 pub fn split_output(
     full_output: egui::FullOutput,
 ) -> (
@@ -107,12 +113,13 @@ struct MeshData {
 }
 
 impl Renderer {
-    /// Create a [`Renderer`] using the provided Direct3D10 device. The [`Renderer`]
-    /// holds various Direct3D10 resources and states derived from the device.
+    /// Create a [`Renderer`] using the provided Direct3D10 device. The
+    /// [`Renderer`] holds various Direct3D10 resources and states derived
+    /// from the device.
     ///
-    /// If any Direct3D resource creation fails, this function will return an error.
-    /// You can create the Direct3D10 device with debug layer enabled to find out
-    /// details on the error.
+    /// If any Direct3D resource creation fails, this function will return an
+    /// error. You can create the Direct3D10 device with debug layer enabled
+    /// to find out details on the error.
     pub fn new(device: &ID3D10Device) -> Result<Self> {
         let mut input_layout = None;
         let mut vertex_shader = None;
@@ -122,31 +129,28 @@ impl Renderer {
         let mut sampler_state = None;
         let mut blend_state = None;
         unsafe {
+            device.CreateInputLayout(
+                &Self::INPUT_ELEMENTS_DESC,
+                Self::VS_BLOB,
+                Some(&mut input_layout),
+            )?;
             device
-                .CreateInputLayout(
-                    &Self::INPUT_ELEMENTS_DESC,
-                    Self::VS_BLOB,
-                    Some(&mut input_layout),
-                )
-                .unwrap();
+                .CreateVertexShader(Self::VS_BLOB, Some(&mut vertex_shader))?;
+            device.CreatePixelShader(Self::PS_BLOB, Some(&mut pixel_shader))?;
+            device.CreateRasterizerState(
+                &Self::RASTERIZER_DESC,
+                Some(&mut rasterizer_state),
+            )?;
+            device.CreateDepthStencilState(
+                &Self::DEPTH_STENCIL_DESC,
+                Some(&mut depth_stencil_state),
+            )?;
+            device.CreateSamplerState(
+                &Self::SAMPLER_DESC,
+                Some(&mut sampler_state),
+            )?;
             device
-                .CreateVertexShader(Self::VS_BLOB, Some(&mut vertex_shader))
-                .unwrap();
-            device
-                .CreatePixelShader(Self::PS_BLOB, Some(&mut pixel_shader))
-                .unwrap();
-            device
-                .CreateRasterizerState(&Self::RASTERIZER_DESC, Some(&mut rasterizer_state))
-                .unwrap();
-            device
-                .CreateDepthStencilState(&Self::DEPTH_STENCIL_DESC, Some(&mut depth_stencil_state))
-                .unwrap();
-            device
-                .CreateSamplerState(&Self::SAMPLER_DESC, Some(&mut sampler_state))
-                .unwrap();
-            device
-                .CreateBlendState(&Self::BLEND_DESC, Some(&mut blend_state))
-                .unwrap();
+                .CreateBlendState(&Self::BLEND_DESC, Some(&mut blend_state))?;
         };
         Ok(Self {
             device: device.clone(),
@@ -171,10 +175,10 @@ impl Renderer {
     ///
     /// ## Error Handling
     ///
-    /// If any Direct3D resource creation fails, this function will return an error.
-    /// In this case you may have a incomplete or incorrect rendering result.
-    /// You can create the Direct3D10 device with debug layer enabled to find out
-    /// details on the error.
+    /// If any Direct3D resource creation fails, this function will return an
+    /// error. In this case you may have a incomplete or incorrect rendering
+    /// result. You can create the Direct3D10 device with debug layer
+    /// enabled to find out details on the error.
     /// If the device has been lost, you should drop the [`Renderer`] and create
     /// a new one.
     ///
@@ -188,12 +192,12 @@ impl Renderer {
     /// rendering pipeline depends on it.
     ///
     /// Particularly, it overrides:
-    /// + The input layout, vertex buffer, index buffer and primitive
-    /// topology in the input assembly stage;
+    /// + The input layout, vertex buffer, index buffer and primitive topology
+    ///   in the input assembly stage;
     /// + The current shader in the vertex shader stage;
     /// + The viewport and rasterizer state in the rasterizer stage;
-    /// + The current shader, shader resource slot 0 and sampler slot 0
-    ///   in the pixel shader stage;
+    /// + The current shader, shader resource slot 0 and sampler slot 0 in the
+    ///   pixel shader stage;
     /// + The render target(s) and blend state in the output merger stage;
     ///
     /// See the [`egui-demo`](https://github.com/Nekomaru-PKU/egui-directx10/blob/main/examples/egui-demo.rs)
@@ -207,14 +211,13 @@ impl Renderer {
         scale_factor: f32,
     ) -> Result<()> {
         self.texture_pool
-            .update(device_context, egui_output.textures_delta)
-            .unwrap();
+            .update(device_context, egui_output.textures_delta)?;
 
         if egui_output.shapes.is_empty() {
             return Ok(());
         }
 
-        let frame_size = Self::get_render_target_size(render_target).unwrap();
+        let frame_size = Self::get_render_target_size(render_target)?;
         let frame_size_scaled = (
             frame_size.0 as f32 / scale_factor,
             frame_size.1 as f32 / scale_factor,
@@ -234,7 +237,7 @@ impl Renderer {
                     Primitive::Callback(..) => {
                         log::warn!("paint callbacks are not yet supported.");
                         None
-                    }
+                    },
                 },
             )
             .filter_map(|(mesh, clip_rect)| {
@@ -254,8 +257,10 @@ impl Renderer {
                         .into_iter()
                         .map(|Vertex { pos, uv, color }| VertexData {
                             pos: Pos2::new(
-                                pos.x * zoom_factor / frame_size_scaled.0 * 2.0 - 1.0,
-                                1.0 - pos.y * zoom_factor / frame_size_scaled.1 * 2.0,
+                                pos.x * zoom_factor / frame_size_scaled.0 * 2.0
+                                    - 1.0,
+                                1.0 - pos.y * zoom_factor / frame_size_scaled.1
+                                    * 2.0,
                             ),
                             uv,
                             color: color.into(),
@@ -267,7 +272,12 @@ impl Renderer {
                 })
             });
         for mesh in meshes {
-            Self::draw_mesh(&self.device, device_context, &self.texture_pool, mesh).unwrap();
+            Self::draw_mesh(
+                &self.device,
+                device_context,
+                &self.texture_pool,
+                mesh,
+            )?;
         }
         Ok(())
     }
@@ -305,8 +315,8 @@ impl Renderer {
         texture_pool: &TexturePool,
         mesh: MeshData,
     ) -> Result<()> {
-        let vb = Self::create_index_buffer(device, &mesh.idx).unwrap();
-        let ib = Self::create_vertex_buffer(device, &mesh.vtx).unwrap();
+        let vb = Self::create_index_buffer(device, &mesh.idx)?;
+        let ib = Self::create_vertex_buffer(device, &mesh.vtx)?;
         unsafe {
             device_context.IASetVertexBuffers(
                 0,
@@ -324,7 +334,9 @@ impl Renderer {
             }]));
         }
         if let Some(srv) = texture_pool.get_srv(mesh.tex) {
-            unsafe { device_context.PSSetShaderResources(0, Some(&[Some(srv)])) };
+            unsafe {
+                device_context.PSSetShaderResources(0, Some(&[Some(srv)]))
+            };
         } else {
             log::warn!(
                 concat!(
@@ -386,26 +398,27 @@ impl Renderer {
         AntialiasedLineEnable: BOOL(1),
     };
 
-    const DEPTH_STENCIL_DESC: D3D10_DEPTH_STENCIL_DESC = D3D10_DEPTH_STENCIL_DESC {
-        DepthEnable: BOOL(1),
-        DepthWriteMask: D3D10_DEPTH_WRITE_MASK_ALL,
-        DepthFunc: D3D10_COMPARISON_GREATER_EQUAL,
-        StencilEnable: BOOL(1),
-        StencilReadMask: D3D10_DEFAULT_STENCIL_READ_MASK as u8,
-        StencilWriteMask: D3D10_DEFAULT_STENCIL_WRITE_MASK as u8,
-        FrontFace: D3D10_DEPTH_STENCILOP_DESC {
-            StencilFailOp: D3D10_STENCIL_OP_KEEP,
-            StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
-            StencilPassOp: D3D10_STENCIL_OP_REPLACE,
-            StencilFunc: D3D10_COMPARISON_ALWAYS,
-        },
-        BackFace: D3D10_DEPTH_STENCILOP_DESC {
-            StencilFailOp: D3D10_STENCIL_OP_KEEP,
-            StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
-            StencilPassOp: D3D10_STENCIL_OP_REPLACE,
-            StencilFunc: D3D10_COMPARISON_ALWAYS,
-        },
-    };
+    const DEPTH_STENCIL_DESC: D3D10_DEPTH_STENCIL_DESC =
+        D3D10_DEPTH_STENCIL_DESC {
+            DepthEnable: BOOL(1),
+            DepthWriteMask: D3D10_DEPTH_WRITE_MASK_ALL,
+            DepthFunc: D3D10_COMPARISON_GREATER_EQUAL,
+            StencilEnable: BOOL(1),
+            StencilReadMask: D3D10_DEFAULT_STENCIL_READ_MASK as u8,
+            StencilWriteMask: D3D10_DEFAULT_STENCIL_WRITE_MASK as u8,
+            FrontFace: D3D10_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
+                StencilFunc: D3D10_COMPARISON_ALWAYS,
+            },
+            BackFace: D3D10_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
+                StencilFunc: D3D10_COMPARISON_ALWAYS,
+            },
+        };
 
     const SAMPLER_DESC: D3D10_SAMPLER_DESC = D3D10_SAMPLER_DESC {
         Filter: D3D10_FILTER_MIN_MAG_MIP_LINEAR,
@@ -449,7 +462,10 @@ impl Renderer {
 }
 
 impl Renderer {
-    fn create_vertex_buffer(device: &ID3D10Device, data: &[VertexData]) -> Result<ID3D10Buffer> {
+    fn create_vertex_buffer(
+        device: &ID3D10Device,
+        data: &[VertexData],
+    ) -> Result<ID3D10Buffer> {
         let mut vertex_buffer = None;
         unsafe {
             device.CreateBuffer(
@@ -465,12 +481,14 @@ impl Renderer {
                 }),
                 Some(&mut vertex_buffer),
             )
-        }
-        .unwrap();
+        }?;
         Ok(vertex_buffer.unwrap())
     }
 
-    fn create_index_buffer(device: &ID3D10Device, data: &[u32]) -> Result<ID3D10Buffer> {
+    fn create_index_buffer(
+        device: &ID3D10Device,
+        data: &[u32],
+    ) -> Result<ID3D10Buffer> {
         let mut index_buffer = None;
         unsafe {
             device.CreateBuffer(
@@ -486,15 +504,14 @@ impl Renderer {
                 }),
                 Some(&mut index_buffer),
             )
-        }
-        .unwrap();
+        }?;
         Ok(index_buffer.unwrap())
     }
 
-    fn get_render_target_size(rtv: &ID3D10RenderTargetView) -> Result<(u32, u32)> {
-        let tex = unsafe { rtv.GetResource() }?
-            .cast::<ID3D10Texture2D>()
-            .unwrap();
+    fn get_render_target_size(
+        rtv: &ID3D10RenderTargetView,
+    ) -> Result<(u32, u32)> {
+        let tex = unsafe { rtv.GetResource() }?.cast::<ID3D10Texture2D>()?;
         let mut desc = self::zeroed();
         unsafe { tex.GetDesc(&mut desc) };
         Ok((desc.Width, desc.Height))

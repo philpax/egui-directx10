@@ -1,25 +1,16 @@
 use windows::Win32::{
-    Foundation::{
-        BOOL, HWND
-    },
+    Foundation::{BOOL, HWND},
     Graphics::{
-        Dxgi::Common::*,
-        Dxgi::*,
         Direct3D10::*,
+        Dxgi::{Common::*, *},
     },
 };
 
 use winit::{
     dpi::PhysicalSize,
-    event::{
-        Event,
-        WindowEvent,
-    },
+    event::{Event, WindowEvent},
     event_loop::EventLoop,
-    raw_window_handle::{
-        HasWindowHandle,
-        RawWindowHandle,
-    },
+    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     window::WindowBuilder,
 };
 
@@ -31,24 +22,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_title("egui-directx10")
         .with_inner_size(PhysicalSize::new(1600, 900))
         .build(&event_loop)?;
-    let hwnd = if let RawWindowHandle::Win32(raw) =
-        window.window_handle()?.as_raw() {
-        HWND(raw.hwnd.get() as _)
-    } else {
-        panic!("unexpected RawWindowHandle variant");
-    };
+    let hwnd =
+        if let RawWindowHandle::Win32(raw) = window.window_handle()?.as_raw() {
+            HWND(raw.hwnd.get() as _)
+        } else {
+            panic!("unexpected RawWindowHandle variant");
+        };
 
     let frame_size = window.inner_size();
-    let (
-        device,
-        swap_chain,
-    ) = create_device_and_swap_chain(
+    let (device, swap_chain) = create_device_and_swap_chain(
         hwnd,
         frame_size.width,
         frame_size.height,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)?;
-    let mut render_target = Some(
-        create_render_target_for_swap_chain(&device, &swap_chain)?);
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+    )?;
+    let mut render_target =
+        Some(create_render_target_for_swap_chain(&device, &swap_chain)?);
 
     let egui_ctx = egui::Context::default();
     let mut egui_renderer = egui_directx10::Renderer::new(&device)?;
@@ -57,55 +46,70 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         egui_ctx.viewport_id(),
         &window,
         None,
-        None);
+        None,
+    );
     let mut egui_demo = egui_demo_lib::DemoWindows::default();
 
     event_loop.run(move |event, event_loop| match event {
         Event::AboutToWait => window.request_redraw(),
         Event::WindowEvent { window_id, event } => {
-            if window_id != window.id() { return; }
-            if egui_winit.on_window_event(&window, &event).consumed { return; }
+            if window_id != window.id() {
+                return;
+            }
+            if egui_winit.on_window_event(&window, &event).consumed {
+                return;
+            }
             match event {
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::Resized(PhysicalSize {
                     width: new_width,
                     height: new_height,
-                }) => if let Err(err) = resize_swap_chain_and_render_target(
-                    &device,
-                    &swap_chain,
-                    &mut render_target,
-                    new_width,
-                    new_height,
-                    DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) {
-                    panic!("fail to resize framebuffers: {err:?}");
-                },
-                WindowEvent::RedrawRequested => if let Some(render_target) = &render_target {
-                    let egui_input = egui_winit.take_egui_input(&window);
-                    let egui_output = egui_ctx.run(egui_input, |ctx| {
-                        egui_demo.ui(ctx);
-                    });
-                    let (
-                        renderer_output,
-                        platform_output,
-                        _,
-                    ) = egui_directx10::split_output(egui_output);
-                    egui_winit.handle_platform_output(&window, platform_output);
-
-                    unsafe {
-                        device.ClearRenderTargetView(
-                            render_target, 
-                            &[0.0, 0.0, 0.0, 1.0]);
-                    }
-                    let _ = egui_renderer.render(
+                }) => {
+                    if let Err(err) = resize_swap_chain_and_render_target(
                         &device,
-                        render_target,
-                        &egui_ctx,
-                        renderer_output,
-                        window.scale_factor() as _);
-                    let _ = unsafe { swap_chain.Present(1, DXGI_PRESENT(0)) };
-                } else { unreachable!() }, _ => ()
+                        &swap_chain,
+                        &mut render_target,
+                        new_width,
+                        new_height,
+                        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+                    ) {
+                        panic!("fail to resize framebuffers: {err:?}");
+                    }
+                },
+                WindowEvent::RedrawRequested => {
+                    if let Some(render_target) = &render_target {
+                        let egui_input = egui_winit.take_egui_input(&window);
+                        let egui_output = egui_ctx.run(egui_input, |ctx| {
+                            egui_demo.ui(ctx);
+                        });
+                        let (renderer_output, platform_output, _) =
+                            egui_directx10::split_output(egui_output);
+                        egui_winit
+                            .handle_platform_output(&window, platform_output);
+
+                        unsafe {
+                            device.ClearRenderTargetView(
+                                render_target,
+                                &[0.0, 0.0, 0.0, 1.0],
+                            );
+                        }
+                        let _ = egui_renderer.render(
+                            &device,
+                            render_target,
+                            &egui_ctx,
+                            renderer_output,
+                            window.scale_factor() as _,
+                        );
+                        let _ =
+                            unsafe { swap_chain.Present(1, DXGI_PRESENT(0)) };
+                    } else {
+                        unreachable!()
+                    }
+                },
+                _ => (),
             }
-        }, _ => ()
+        },
+        _ => (),
     })?;
     Ok(())
 }
@@ -117,7 +121,7 @@ fn resize_swap_chain_and_render_target(
     new_width: u32,
     new_height: u32,
     new_format: DXGI_FORMAT,
-)-> windows::core::Result<()> {
+) -> windows::core::Result<()> {
     render_target.take();
     unsafe {
         swap_chain.ResizeBuffers(
@@ -125,10 +129,11 @@ fn resize_swap_chain_and_render_target(
             new_width,
             new_height,
             new_format,
-            DXGI_SWAP_CHAIN_FLAG(0))
+            DXGI_SWAP_CHAIN_FLAG(0),
+        )
     }?;
-    render_target.replace(
-        create_render_target_for_swap_chain(device, swap_chain)?);
+    render_target
+        .replace(create_render_target_for_swap_chain(device, swap_chain)?);
     Ok(())
 }
 
@@ -137,14 +142,12 @@ fn create_device_and_swap_chain(
     frame_width: u32,
     frame_height: u32,
     frame_format: DXGI_FORMAT,
-)-> windows::core::Result<(
-    ID3D10Device,
-    IDXGISwapChain)> {
+) -> windows::core::Result<(ID3D10Device, IDXGISwapChain)> {
     let dxgi_factory: IDXGIFactory = unsafe { CreateDXGIFactory() }?;
     let dxgi_adapter: IDXGIAdapter = unsafe { dxgi_factory.EnumAdapters(0) }?;
 
     let mut device = None;
-    unsafe { 
+    unsafe {
         D3D10CreateDevice(
             &dxgi_adapter,
             D3D10_DRIVER_TYPE_HARDWARE,
@@ -155,16 +158,17 @@ fn create_device_and_swap_chain(
                 0
             },
             D3D10_SDK_VERSION,
-            Some(&mut device))
+            Some(&mut device),
+        )
     }?;
     let device = device.unwrap();
 
     let swap_chain_desc = DXGI_SWAP_CHAIN_DESC {
         BufferDesc: DXGI_MODE_DESC {
-            Width : frame_width,
+            Width: frame_width,
             Height: frame_height,
             Format: frame_format,
-            .. DXGI_MODE_DESC::default()
+            ..DXGI_MODE_DESC::default()
         },
         SampleDesc: DXGI_SAMPLE_DESC {
             Count: 1,
@@ -180,17 +184,13 @@ fn create_device_and_swap_chain(
 
     let mut swap_chain = None;
     unsafe {
-        dxgi_factory.CreateSwapChain(
-            &device,
-            &swap_chain_desc,
-            &mut swap_chain)
-    }.ok()?;
+        dxgi_factory.CreateSwapChain(&device, &swap_chain_desc, &mut swap_chain)
+    }
+    .ok()?;
     let swap_chain = swap_chain.unwrap();
 
     unsafe {
-        dxgi_factory.MakeWindowAssociation(
-            window,
-            DXGI_MWA_NO_ALT_ENTER)
+        dxgi_factory.MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER)
     }?;
     Ok((device, swap_chain))
 }
@@ -198,16 +198,16 @@ fn create_device_and_swap_chain(
 fn create_render_target_for_swap_chain(
     device: &ID3D10Device,
     swap_chain: &IDXGISwapChain,
-)-> windows::core::Result<ID3D10RenderTargetView> {
-    let swap_chain_texture = unsafe {
-        swap_chain.GetBuffer::<ID3D10Texture2D>(0)
-    }?;
+) -> windows::core::Result<ID3D10RenderTargetView> {
+    let swap_chain_texture =
+        unsafe { swap_chain.GetBuffer::<ID3D10Texture2D>(0) }?;
     let mut render_target = None;
     unsafe {
         device.CreateRenderTargetView(
             &swap_chain_texture,
             None,
-            Some(&mut render_target))
+            Some(&mut render_target),
+        )
     }?;
     Ok(render_target.unwrap())
 }
