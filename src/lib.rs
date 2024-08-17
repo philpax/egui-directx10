@@ -120,7 +120,7 @@ impl Renderer {
     /// If any Direct3D resource creation fails, this function will return an
     /// error. You can create the Direct3D10 device with debug layer enabled
     /// to find out details on the error.
-    pub fn new(device: &ID3D10Device) -> Result<Self> {
+    pub fn new(device: &ID3D10Device, gamma_output: bool) -> Result<Self> {
         let mut input_layout = None;
         let mut vertex_shader = None;
         let mut pixel_shader = None;
@@ -136,7 +136,14 @@ impl Renderer {
             )?;
             device
                 .CreateVertexShader(Self::VS_BLOB, Some(&mut vertex_shader))?;
-            device.CreatePixelShader(Self::PS_BLOB, Some(&mut pixel_shader))?;
+            device.CreatePixelShader(
+                if gamma_output {
+                    Self::PS_GAMMA_BLOB
+                } else {
+                    Self::PS_LINEAR_BLOB
+                },
+                Some(&mut pixel_shader),
+            )?;
             device.CreateRasterizerState(
                 &Self::RASTERIZER_DESC,
                 Some(&mut rasterizer_state),
@@ -353,7 +360,10 @@ impl Renderer {
 
 impl Renderer {
     const VS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_vs.bin");
-    const PS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_ps.bin");
+    const PS_LINEAR_BLOB: &'static [u8] =
+        include_bytes!("../shaders/egui_ps_linear.bin");
+    const PS_GAMMA_BLOB: &'static [u8] =
+        include_bytes!("../shaders/egui_ps_gamma.bin");
 
     const INPUT_ELEMENTS_DESC: [D3D10_INPUT_ELEMENT_DESC; 3] = [
         D3D10_INPUT_ELEMENT_DESC {
