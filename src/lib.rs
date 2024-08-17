@@ -55,6 +55,7 @@ pub struct Renderer {
     vertex_shader: ID3D10VertexShader,
     pixel_shader: ID3D10PixelShader,
     rasterizer_state: ID3D10RasterizerState,
+    depth_stencil_state: ID3D10DepthStencilState,
     sampler_state: ID3D10SamplerState,
     blend_state: ID3D10BlendState,
 
@@ -119,11 +120,12 @@ impl Renderer {
     /// If any Direct3D resource creation fails, this function will return an
     /// error. You can create the Direct3D10 device with debug layer enabled
     /// to find out details on the error.
-    pub fn new(device: &ID3D10Device) -> Result<Self> {
+    pub fn new(device: &ID3D10Device, gamma_output: bool) -> Result<Self> {
         let mut input_layout = None;
         let mut vertex_shader = None;
         let mut pixel_shader = None;
         let mut rasterizer_state = None;
+        let mut depth_stencil_state = None;
         let mut sampler_state = None;
         let mut blend_state = None;
         unsafe {
@@ -134,10 +136,21 @@ impl Renderer {
             )?;
             device
                 .CreateVertexShader(Self::VS_BLOB, Some(&mut vertex_shader))?;
-            device.CreatePixelShader(Self::PS_BLOB, Some(&mut pixel_shader))?;
+            device.CreatePixelShader(
+                if gamma_output {
+                    Self::PS_GAMMA_BLOB
+                } else {
+                    Self::PS_LINEAR_BLOB
+                },
+                Some(&mut pixel_shader),
+            )?;
             device.CreateRasterizerState(
                 &Self::RASTERIZER_DESC,
                 Some(&mut rasterizer_state),
+            )?;
+            device.CreateDepthStencilState(
+                &Self::DEPTH_STENCIL_DESC,
+                Some(&mut depth_stencil_state),
             )?;
             device.CreateSamplerState(
                 &Self::SAMPLER_DESC,
@@ -152,6 +165,7 @@ impl Renderer {
             vertex_shader: vertex_shader.unwrap(),
             pixel_shader: pixel_shader.unwrap(),
             rasterizer_state: rasterizer_state.unwrap(),
+            depth_stencil_state: depth_stencil_state.unwrap(),
             sampler_state: sampler_state.unwrap(),
             blend_state: blend_state.unwrap(),
             texture_pool: TexturePool::new(device),
@@ -298,6 +312,7 @@ impl Renderer {
             ctx.PSSetSamplers(0, Some(&[Some(self.sampler_state.clone())]));
             ctx.OMSetRenderTargets(Some(&[Some(render_target.clone())]), None);
             ctx.OMSetBlendState(&self.blend_state, &[0.; 4], u32::MAX);
+            ctx.OMSetDepthStencilState(&self.depth_stencil_state, 2);
         }
     }
 
@@ -345,7 +360,10 @@ impl Renderer {
 
 impl Renderer {
     const VS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_vs.bin");
-    const PS_BLOB: &'static [u8] = include_bytes!("../shaders/egui_ps.bin");
+    const PS_LINEAR_BLOB: &'static [u8] =
+        include_bytes!("../shaders/egui_ps_linear.bin");
+    const PS_GAMMA_BLOB: &'static [u8] =
+        include_bytes!("../shaders/egui_ps_gamma.bin");
 
     const INPUT_ELEMENTS_DESC: [D3D10_INPUT_ELEMENT_DESC; 3] = [
         D3D10_INPUT_ELEMENT_DESC {
@@ -380,15 +398,37 @@ impl Renderer {
     const RASTERIZER_DESC: D3D10_RASTERIZER_DESC = D3D10_RASTERIZER_DESC {
         FillMode: D3D10_FILL_SOLID,
         CullMode: D3D10_CULL_NONE,
-        FrontCounterClockwise: BOOL(0),
+        FrontCounterClockwise: BOOL(1),
         DepthBias: 0,
         DepthBiasClamp: 0.,
         SlopeScaledDepthBias: 0.,
-        DepthClipEnable: BOOL(0),
-        ScissorEnable: BOOL(1),
-        MultisampleEnable: BOOL(0),
-        AntialiasedLineEnable: BOOL(0),
+        DepthClipEnable: BOOL(1),
+        ScissorEnable: BOOL(0),
+        MultisampleEnable: BOOL(1),
+        AntialiasedLineEnable: BOOL(1),
     };
+
+    const DEPTH_STENCIL_DESC: D3D10_DEPTH_STENCIL_DESC =
+        D3D10_DEPTH_STENCIL_DESC {
+            DepthEnable: BOOL(1),
+            DepthWriteMask: D3D10_DEPTH_WRITE_MASK_ALL,
+            DepthFunc: D3D10_COMPARISON_GREATER_EQUAL,
+            StencilEnable: BOOL(1),
+            StencilReadMask: D3D10_DEFAULT_STENCIL_READ_MASK as u8,
+            StencilWriteMask: D3D10_DEFAULT_STENCIL_WRITE_MASK as u8,
+            FrontFace: D3D10_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
+                StencilFunc: D3D10_COMPARISON_ALWAYS,
+            },
+            BackFace: D3D10_DEPTH_STENCILOP_DESC {
+                StencilFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
+                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
+                StencilFunc: D3D10_COMPARISON_ALWAYS,
+            },
+        };
 
     const SAMPLER_DESC: D3D10_SAMPLER_DESC = D3D10_SAMPLER_DESC {
         Filter: D3D10_FILTER_MIN_MAG_MIP_LINEAR,
@@ -416,7 +456,7 @@ impl Renderer {
         DestBlend: D3D10_BLEND_INV_SRC_ALPHA,
         BlendOp: D3D10_BLEND_OP_ADD,
         SrcBlendAlpha: D3D10_BLEND_ONE,
-        DestBlendAlpha: D3D10_BLEND_INV_SRC_ALPHA,
+        DestBlendAlpha: D3D10_BLEND_ZERO,
         BlendOpAlpha: D3D10_BLEND_OP_ADD,
         RenderTargetWriteMask: [
             D3D10_COLOR_WRITE_ENABLE_ALL.0 as _,
