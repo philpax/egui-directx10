@@ -55,7 +55,6 @@ impl TexturePool {
                     tid,
                     Self::create_texture(&self.device, delta.image)?,
                 );
-                log::info!("inserted texture");
                 // the old texture is returned and dropped here, freeing
                 // all its gpu resource.
             } else if let Some(tex) = self.pool.get_mut(&tid) {
@@ -65,7 +64,6 @@ impl TexturePool {
                     delta.image,
                     delta.pos.unwrap(),
                 )?;
-                log::info!("updated texture");
             } else {
                 log::warn!("egui wants to update a non-existing texture {tid:?}. this request will be ignored.");
             }
