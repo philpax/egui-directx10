@@ -26,13 +26,15 @@ float4 ps_main_gamma(
     in const float4 i_pos  : SV_POSITION,
     in const float2 i_uv   : TEXCOORD,
     in const float4 i_color: COLOR): SV_TARGET {
-    float4 linearColor = i_color * g_tex.Sample(g_sampler, i_uv);
-    return float4(gamma_from_linear_rgb(linearColor.rgb), linearColor.a);
+    // float4 linearColor = i_color * g_tex.Sample(g_sampler, i_uv);
+    // return float4(gamma_from_linear_rgb(linearColor.rgb), linearColor.a);
+    return float4(i_uv, 0.0, 1.0);
 }
 
 float4 ps_main_linear(
     in const float4 i_pos  : SV_POSITION,
     in const float2 i_uv   : TEXCOORD,
     in const float4 i_color: COLOR): SV_TARGET {
-    return i_color * g_tex.Sample(g_sampler, i_uv);
+    // return i_color * g_tex.Sample(g_sampler, i_uv);
+    return float4(i_uv, 0.0, 1.0);
 }
