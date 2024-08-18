@@ -222,7 +222,7 @@ impl Renderer {
         &mut self,
         device_context: &ID3D10Device,
         render_target: &ID3D10RenderTargetView,
-        depth_stencil_target: &ID3D10DepthStencilView,
+        depth_stencil_target: Option<&ID3D10DepthStencilView>,
         egui_ctx: &egui::Context,
         egui_output: RendererOutput,
         scale_factor: f32,
@@ -318,7 +318,7 @@ impl Renderer {
         &mut self,
         ctx: &ID3D10Device,
         render_target: &ID3D10RenderTargetView,
-        depth_stencil_target: &ID3D10DepthStencilView,
+        depth_stencil_target: Option<&ID3D10DepthStencilView>,
         frame_size: (u32, u32),
     ) {
         unsafe {
@@ -338,7 +338,7 @@ impl Renderer {
             ctx.PSSetSamplers(0, Some(&[Some(self.sampler_state.clone())]));
             ctx.OMSetRenderTargets(
                 Some(&[Some(render_target.clone())]),
-                Some(depth_stencil_target),
+                depth_stencil_target,
             );
             ctx.OMSetBlendState(&self.blend_state, &[0.; 4], u32::MAX);
             ctx.OMSetDepthStencilState(&self.depth_stencil_state, 2);
