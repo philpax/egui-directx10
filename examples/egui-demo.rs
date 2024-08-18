@@ -40,7 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(create_render_target_for_swap_chain(&device, &swap_chain)?);
 
     let egui_ctx = egui::Context::default();
-    let mut egui_renderer = egui_directx10::Renderer::new(&device, false)?;
+    let mut egui_renderer =
+        egui_directx10::Renderer::new(&device, false, false)?;
     let mut egui_winit = egui_winit::State::new(
         egui_ctx.clone(),
         egui_ctx.viewport_id(),
