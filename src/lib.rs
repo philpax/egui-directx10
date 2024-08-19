@@ -391,14 +391,14 @@ impl Renderer {
     const RASTERIZER_DESC: D3D10_RASTERIZER_DESC = D3D10_RASTERIZER_DESC {
         FillMode: D3D10_FILL_SOLID,
         CullMode: D3D10_CULL_NONE,
-        FrontCounterClockwise: BOOL(1),
+        FrontCounterClockwise: BOOL(0),
         DepthBias: 0,
         DepthBiasClamp: 0.,
         SlopeScaledDepthBias: 0.,
         DepthClipEnable: BOOL(0),
         ScissorEnable: BOOL(1),
-        MultisampleEnable: BOOL(1),
-        AntialiasedLineEnable: BOOL(1),
+        MultisampleEnable: BOOL(0),
+        AntialiasedLineEnable: BOOL(0),
     };
 
     const SAMPLER_DESC: D3D10_SAMPLER_DESC = D3D10_SAMPLER_DESC {
