@@ -55,7 +55,6 @@ pub struct Renderer {
     vertex_shader: ID3D10VertexShader,
     pixel_shader: ID3D10PixelShader,
     rasterizer_state: ID3D10RasterizerState,
-    depth_stencil_state: ID3D10DepthStencilState,
     sampler_state: ID3D10SamplerState,
     blend_state: ID3D10BlendState,
 
@@ -125,7 +124,6 @@ impl Renderer {
         let mut vertex_shader = None;
         let mut pixel_shader = None;
         let mut rasterizer_state = None;
-        let mut depth_stencil_state = None;
         let mut sampler_state = None;
         let mut blend_state = None;
         unsafe {
@@ -148,10 +146,6 @@ impl Renderer {
                 &Self::RASTERIZER_DESC,
                 Some(&mut rasterizer_state),
             )?;
-            device.CreateDepthStencilState(
-                &Self::DEPTH_STENCIL_DESC,
-                Some(&mut depth_stencil_state),
-            )?;
             device.CreateSamplerState(
                 &Self::SAMPLER_DESC,
                 Some(&mut sampler_state),
@@ -165,7 +159,6 @@ impl Renderer {
             vertex_shader: vertex_shader.unwrap(),
             pixel_shader: pixel_shader.unwrap(),
             rasterizer_state: rasterizer_state.unwrap(),
-            depth_stencil_state: depth_stencil_state.unwrap(),
             sampler_state: sampler_state.unwrap(),
             blend_state: blend_state.unwrap(),
             texture_pool: TexturePool::new(device),
@@ -313,7 +306,6 @@ impl Renderer {
             ctx.PSSetSamplers(0, Some(&[Some(self.sampler_state.clone())]));
             ctx.OMSetRenderTargets(Some(&[Some(render_target.clone())]), None);
             ctx.OMSetBlendState(&self.blend_state, &[0.; 4], u32::MAX);
-            ctx.OMSetDepthStencilState(&self.depth_stencil_state, 2);
         }
     }
 
@@ -403,33 +395,11 @@ impl Renderer {
         DepthBias: 0,
         DepthBiasClamp: 0.,
         SlopeScaledDepthBias: 0.,
-        DepthClipEnable: BOOL(1),
-        ScissorEnable: BOOL(0),
+        DepthClipEnable: BOOL(0),
+        ScissorEnable: BOOL(1),
         MultisampleEnable: BOOL(1),
         AntialiasedLineEnable: BOOL(1),
     };
-
-    const DEPTH_STENCIL_DESC: D3D10_DEPTH_STENCIL_DESC =
-        D3D10_DEPTH_STENCIL_DESC {
-            DepthEnable: BOOL(1),
-            DepthWriteMask: D3D10_DEPTH_WRITE_MASK_ALL,
-            DepthFunc: D3D10_COMPARISON_GREATER_EQUAL,
-            StencilEnable: BOOL(1),
-            StencilReadMask: D3D10_DEFAULT_STENCIL_READ_MASK as u8,
-            StencilWriteMask: D3D10_DEFAULT_STENCIL_WRITE_MASK as u8,
-            FrontFace: D3D10_DEPTH_STENCILOP_DESC {
-                StencilFailOp: D3D10_STENCIL_OP_KEEP,
-                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
-                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
-                StencilFunc: D3D10_COMPARISON_ALWAYS,
-            },
-            BackFace: D3D10_DEPTH_STENCILOP_DESC {
-                StencilFailOp: D3D10_STENCIL_OP_KEEP,
-                StencilDepthFailOp: D3D10_STENCIL_OP_KEEP,
-                StencilPassOp: D3D10_STENCIL_OP_REPLACE,
-                StencilFunc: D3D10_COMPARISON_ALWAYS,
-            },
-        };
 
     const SAMPLER_DESC: D3D10_SAMPLER_DESC = D3D10_SAMPLER_DESC {
         Filter: D3D10_FILTER_MIN_MAG_MIP_LINEAR,
