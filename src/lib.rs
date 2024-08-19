@@ -60,9 +60,6 @@ pub struct Renderer {
     blend_state: ID3D10BlendState,
 
     texture_pool: TexturePool,
-
-    restore_state_after_render: bool,
-    state_block: Option<StateBlock>,
 }
 
 /// Part of [`egui::FullOutput`] that is consumed by [`Renderer::render`].
@@ -123,11 +120,7 @@ impl Renderer {
     /// If any Direct3D resource creation fails, this function will return an
     /// error. You can create the Direct3D10 device with debug layer enabled
     /// to find out details on the error.
-    pub fn new(
-        device: &ID3D10Device,
-        gamma_output: bool,
-        restore_state_after_render: bool,
-    ) -> Result<Self> {
+    pub fn new(device: &ID3D10Device, gamma_output: bool) -> Result<Self> {
         let mut input_layout = None;
         let mut vertex_shader = None;
         let mut pixel_shader = None;
@@ -176,8 +169,6 @@ impl Renderer {
             sampler_state: sampler_state.unwrap(),
             blend_state: blend_state.unwrap(),
             texture_pool: TexturePool::new(device),
-            restore_state_after_render,
-            state_block: None,
         })
     }
 
@@ -222,7 +213,6 @@ impl Renderer {
         &mut self,
         device_context: &ID3D10Device,
         render_target: &ID3D10RenderTargetView,
-        depth_stencil_target: Option<&ID3D10DepthStencilView>,
         egui_ctx: &egui::Context,
         egui_output: RendererOutput,
         scale_factor: f32,
@@ -241,17 +231,7 @@ impl Renderer {
         );
         let zoom_factor = egui_ctx.zoom_factor();
 
-        if self.restore_state_after_render {
-            self.state_block =
-                Some(unsafe { StateBlock::new(device_context)? });
-        }
-
-        self.setup(
-            device_context,
-            render_target,
-            depth_stencil_target,
-            frame_size,
-        );
+        self.setup(device_context, render_target, frame_size);
         let meshes = egui_ctx
             .tessellate(egui_output.shapes, egui_output.pixels_per_point)
             .into_iter()
@@ -307,10 +287,6 @@ impl Renderer {
             )?;
         }
 
-        if let Some(state_block) = self.state_block.as_ref() {
-            unsafe { state_block.apply(device_context) };
-        }
-
         Ok(())
     }
 
@@ -318,7 +294,6 @@ impl Renderer {
         &mut self,
         ctx: &ID3D10Device,
         render_target: &ID3D10RenderTargetView,
-        depth_stencil_target: Option<&ID3D10DepthStencilView>,
         frame_size: (u32, u32),
     ) {
         unsafe {
@@ -336,10 +311,7 @@ impl Renderer {
                 MaxDepth: 1.,
             }]));
             ctx.PSSetSamplers(0, Some(&[Some(self.sampler_state.clone())]));
-            ctx.OMSetRenderTargets(
-                Some(&[Some(render_target.clone())]),
-                depth_stencil_target,
-            );
+            ctx.OMSetRenderTargets(Some(&[Some(render_target.clone())]), None);
             ctx.OMSetBlendState(&self.blend_state, &[0.; 4], u32::MAX);
             ctx.OMSetDepthStencilState(&self.depth_stencil_state, 2);
         }
@@ -554,109 +526,5 @@ impl Renderer {
         let mut desc = self::zeroed();
         unsafe { tex.GetDesc(&mut desc) };
         Ok((desc.Width, desc.Height))
-    }
-}
-
-/// A custom state block to capture and restore the Direct3D10 pipeline state.
-/// This is used as DXVK does not implement `ID3D10StateBlock`.
-struct StateBlock {
-    primitive_topology: D3D_PRIMITIVE_TOPOLOGY,
-    input_layout: Option<ID3D10InputLayout>,
-    vertex_shader: Option<ID3D10VertexShader>,
-    pixel_shader: Option<ID3D10PixelShader>,
-    rasterizer_state: Option<ID3D10RasterizerState>,
-    viewports: Vec<D3D10_VIEWPORT>,
-    sampler_states: Vec<Option<ID3D10SamplerState>>,
-    render_targets: Vec<Option<ID3D10RenderTargetView>>,
-    depth_stencil_view: Option<ID3D10DepthStencilView>,
-    blend_state: Option<ID3D10BlendState>,
-    blend_factor: [f32; 4],
-    sample_mask: u32,
-    depth_stencil_state: Option<ID3D10DepthStencilState>,
-    stencil_ref: u32,
-}
-impl StateBlock {
-    unsafe fn new(device: &ID3D10Device) -> Result<Self> {
-        let mut state_block = StateBlock {
-            primitive_topology: D3D_PRIMITIVE_TOPOLOGY::default(),
-            input_layout: None,
-            vertex_shader: None,
-            pixel_shader: None,
-            rasterizer_state: None,
-            viewports: Vec::new(),
-            sampler_states: vec![None; 16],
-            render_targets: vec![None; 8],
-            depth_stencil_view: None,
-            blend_state: None,
-            blend_factor: [0.0; 4],
-            sample_mask: 0,
-            depth_stencil_state: None,
-            stencil_ref: 0,
-        };
-
-        // Capture current state
-        state_block.primitive_topology = device.IAGetPrimitiveTopology();
-        state_block.input_layout = device.IAGetInputLayout().ok();
-        state_block.vertex_shader = device.VSGetShader().ok();
-        state_block.pixel_shader = device.PSGetShader().ok();
-        state_block.rasterizer_state = device.RSGetState().ok();
-
-        let mut num_viewports: u32 = 0;
-        device.RSGetViewports(&mut num_viewports, None);
-        state_block
-            .viewports
-            .resize(num_viewports as usize, D3D10_VIEWPORT::default());
-        device.RSGetViewports(
-            &mut num_viewports,
-            Some(state_block.viewports.as_mut_ptr()),
-        );
-
-        device.PSGetSamplers(0, Some(&mut state_block.sampler_states));
-
-        let mut depth_stencil_view = None;
-        device.OMGetRenderTargets(
-            Some(&mut state_block.render_targets),
-            Some(&mut depth_stencil_view),
-        );
-        state_block.depth_stencil_view = depth_stencil_view;
-
-        let mut blend_state = None;
-        device.OMGetBlendState(
-            Some(&mut blend_state),
-            Some(&mut state_block.blend_factor),
-            Some(&mut state_block.sample_mask),
-        );
-        state_block.blend_state = blend_state;
-
-        let mut depth_stencil_state = None;
-        device.OMGetDepthStencilState(
-            Some(&mut depth_stencil_state),
-            Some(&mut state_block.stencil_ref),
-        );
-        state_block.depth_stencil_state = depth_stencil_state;
-
-        Ok(state_block)
-    }
-    unsafe fn apply(&self, device: &ID3D10Device) {
-        device.IASetPrimitiveTopology(self.primitive_topology);
-        device.IASetInputLayout(self.input_layout.as_ref());
-        device.VSSetShader(self.vertex_shader.as_ref());
-        device.PSSetShader(self.pixel_shader.as_ref());
-        device.RSSetState(self.rasterizer_state.as_ref());
-        device.RSSetViewports(Some(&self.viewports));
-        device.PSSetSamplers(0, Some(&self.sampler_states));
-        device.OMSetRenderTargets(
-            Some(&self.render_targets),
-            self.depth_stencil_view.as_ref(),
-        );
-        device.OMSetBlendState(
-            self.blend_state.as_ref(),
-            &self.blend_factor,
-            self.sample_mask,
-        );
-        device.OMSetDepthStencilState(
-            self.depth_stencil_state.as_ref(),
-            self.stencil_ref,
-        );
     }
 }
